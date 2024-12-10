@@ -1,7 +1,6 @@
 import os
 import torch
 import numpy as np
-import pybullet as p
 
 from envs.ArmPickAndDrop import ArmPickAndDrop
 from envs.robot import UR5Robotiq85
@@ -12,24 +11,10 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 MODEL_SAVE_PATH = "./saved_models/"
 # os.makedirs(MODEL_SAVE_PATH, exist_ok=False)
 
-
-def normalize_action(action):
-    action_1 = action[:3]
-    action_2 = action[3:6]
-    action_3 = action[6]
-    action_2 = np.array(action_2) * np.pi
-
-    action_3 = (action_3 + 1) / 2 * 0.085
-
-    normalized_action = np.concatenate([action_1, action_2, [action_3]])
-
-    return normalized_action
-
-
 def td3_trainning():
-    robot = UR5Robotiq85((0, 0, 0), (0, 0, 0))
     camera = Camera((1, 1, 1), (0, 0, 0), (0, 0, 1), 0.1, 5, (320, 320), 40)
-    target_position_B = np.array([0.5, 0.5, 0.0])
+    robot = UR5Robotiq85((0.0, 0.0, 0.4), (0, 0, 0))
+    target_position_B = np.array([0.0, 0.5, 0.0])
     ycb_models = YCBModels(
         os.path.join("./data/ycb", "**", "textured-decmp.obj"),
     )
@@ -44,10 +29,10 @@ def td3_trainning():
     td3 = TD3(state_dim=state_dim, action_dim=action_dim, max_action=max_action)
     num_episodes = 1000
     replay_buffer = ReplayBuffer()
-    batch_size = 4096
-    max_steps = 150
+    batch_size = 2048
+    max_steps = 200
 
-    model_filename = os.path.join(MODEL_SAVE_PATH, "td3_model_episode_510.pth")
+    model_filename = os.path.join(MODEL_SAVE_PATH, "td3_model.pth")
     start_episode = 0
     if os.path.exists(model_filename):
         checkpoint = torch.load(model_filename)
@@ -59,7 +44,7 @@ def td3_trainning():
         
         start_episode = checkpoint["episode"] + 1
         print(f"Resuming training from episode {start_episode}.")
-    action_now = 0
+
     for episode in range(num_episodes):
         state = env.reset()
         episode += start_episode
@@ -67,15 +52,9 @@ def td3_trainning():
         done = False
         episode_reward = 0
         while not done and steps < max_steps:
-            action = normalize_action(
-                td3.select_action(
-                    torch.tensor(state, dtype=torch.float32, device=device)
-                )
-            )
+            action = td3.select_action(torch.tensor(state, dtype=torch.float32, device=device))
 
-            action_now += action
-
-            next_state, reward, done, info = env.step(action_now)
+            next_state, reward, done, info = env.step(action)
             # print(reward)
             replay_buffer.add(
                 torch.tensor(state, dtype=torch.float32, device=device),

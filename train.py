@@ -12,29 +12,15 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 MODEL_SAVE_PATH = "./saved_models/"
 # os.makedirs(MODEL_SAVE_PATH, exist_ok=False)
 
-
-def normalize_action(action):
-    action_1 = action[:3]
-    action_2 = action[3:6]
-    action_3 = action[6]
-    action_2 = np.array(action_2) * np.pi
-
-    action_3 = (action_3 + 1) / 2 * 0.085
-
-    normalized_action = np.concatenate([action_1, action_2, [action_3]])
-
-    return normalized_action
-
-
 def td3_trainning():
-    robot = UR5Robotiq85((0, 0.5, 0), (0, 0, 0))
     camera = Camera((1, 1, 1), (0, 0, 0), (0, 0, 1), 0.1, 5, (320, 320), 40)
-    target_position_B = np.array([0.5, 0.5, 0.0])
+    robot = UR5Robotiq85((0.0, 0.0, 0.4), (0, 0, 0))
+    target_position_B = np.array([0.0, 0.5, 0.0])
     ycb_models = YCBModels(
         os.path.join("./data/ycb", "**", "textured-decmp.obj"),
     )
     env = ArmPickAndDrop(
-        robot, ycb_models, camera, vis=True, target_position_B=target_position_B
+        robot, ycb_models, camera, vis=False, target_position_B=target_position_B
     )
 
     state = env.reset()
@@ -42,12 +28,12 @@ def td3_trainning():
     action_dim = 7  # robot.get_action_space()
     max_action = 1.0
     td3 = TD3(state_dim=state_dim, action_dim=action_dim, max_action=max_action)
-    num_episodes = 5000
+    num_episodes = 1000
     replay_buffer = ReplayBuffer()
     batch_size = 256
-    max_steps = 250
+    max_steps = 200
 
-    model_filename = os.path.join(MODEL_SAVE_PATH, "td3_model_5000.pth")
+    model_filename = os.path.join(MODEL_SAVE_PATH, "td3_model.pth")
     start_episode = 0
     if os.path.exists(model_filename):
         checkpoint = torch.load(model_filename)
@@ -70,13 +56,6 @@ def td3_trainning():
             action = td3.select_action(
                 torch.tensor(state, dtype=torch.float32, device=device)
             )
-            # action = normalize_action(
-            #     td3.select_action(
-            #     torch.tensor(state, dtype=torch.float32, device=device)
-            # )
-            # )
-            # action = [0, 0, 0, 0, 0, 0, 0]
-            # action_now += action
 
             next_state, reward, done, info = env.step(action)
             # print(reward)
@@ -97,7 +76,7 @@ def td3_trainning():
             steps += 1
 
         print(f"Episode {episode}, Reward: {episode_reward}")
-        if episode % 100 == 0:
+        if episode % 50 == 0 and episode != 0:
             checkpoint = {
                 "episode": start_episode + episode,
                 "actor": td3.actor.state_dict(),

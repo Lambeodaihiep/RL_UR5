@@ -51,19 +51,19 @@ class ArmPickAndDrop:
         self.robot.step_simulation = self.step_simulation
 
         # custom sliders to tune parameters (name of the parameter,range,initial value)
-        self.xin = p.addUserDebugParameter("x", -0.224, 0.224, 0)
-        self.yin = p.addUserDebugParameter("y", -0.224, 0.224, 0)
-        self.zin = p.addUserDebugParameter("z", 0, 1.0, 0.5)
-        self.rollId = p.addUserDebugParameter("roll", -3.14, 3.14, 0)
-        self.pitchId = p.addUserDebugParameter("pitch", -3.14, 3.14, np.pi / 2)
-        self.yawId = p.addUserDebugParameter("yaw", -np.pi / 2, np.pi / 2, np.pi / 2)
-        self.gripper_opening_length_control = p.addUserDebugParameter(
-            "gripper_opening_length", 0, 0.085, 0.04
-        )
+        # self.xin = p.addUserDebugParameter("x", -0.224, 0.224, 0)
+        # self.yin = p.addUserDebugParameter("y", -0.224, 0.224, 0)
+        # self.zin = p.addUserDebugParameter("z", 0, 1.0, 0.5)
+        # self.rollId = p.addUserDebugParameter("roll", -3.14, 3.14, 0)
+        # self.pitchId = p.addUserDebugParameter("pitch", -3.14, 3.14, np.pi / 2)
+        # self.yawId = p.addUserDebugParameter("yaw", -np.pi / 2, np.pi / 2, np.pi / 2)
+        # self.gripper_opening_length_control = p.addUserDebugParameter(
+        #     "gripper_opening_length", 0, 0.085, 0.04
+        # )
 
         self.boxID = p.loadURDF(
             "assets/urdf/block.urdf",
-            [0.0, 0.0, 0.0],
+            [0.5, 0.0, 0.0],
             # p.getQuaternionFromEuler([0, 1.5706453, 0]),
             p.getQuaternionFromEuler([0, 0, 0]),
             useFixedBase=False,
@@ -81,27 +81,37 @@ class ArmPickAndDrop:
         self.obstacles = [
             p.loadURDF(
                 "assets/obstacles/block.urdf",
-                basePosition=[0, 0.65, 0.9],
-                useFixedBase=True,
-            ),
-            # p.loadURDF(
-            #     "assets/obstacles/block.urdf",
-            #     basePosition=[0, 0.65, 0.3],
-            #     useFixedBase=True,
-            # ),
-            p.loadURDF(
-                "assets/obstacles/block.urdf",
-                basePosition=[0, -0.65, 0.9],
+                basePosition=[0.95, 0.0, 0.9],
                 useFixedBase=True,
             ),
             p.loadURDF(
                 "assets/obstacles/block.urdf",
-                basePosition=[0, -0.65, 0.3],
+                basePosition=[0.65, -0.6, 0.3],
+                useFixedBase=True,
+            ),
+            p.loadURDF(
+                "assets/obstacles/block.urdf",
+                basePosition=[-0.4, 0.0, 0.9],
+                useFixedBase=True,
+            ),
+            p.loadURDF(
+                "assets/obstacles/block.urdf",
+                basePosition=[-0.4, 0.0, 0.3],
                 useFixedBase=True,
             ),
             p.loadURDF(
                 "assets/obstacles/block.urdf",
                 basePosition=[0, 0, 1.5],
+                useFixedBase=True,
+            ),
+            p.loadURDF(
+                "assets/obstacles/block.urdf",
+                basePosition=[0.3, -0.6, 0.6],
+                useFixedBase=True,
+            ),
+            p.loadURDF(
+                "assets/obstacles/block.urdf",
+                basePosition=[0.3, 0.6, 0.6],
                 useFixedBase=True,
             ),
         ]
@@ -176,7 +186,9 @@ class ArmPickAndDrop:
         """
         for obstacle in self.obstacles:
             contacts = p.getContactPoints(bodyA=self.robot.id, bodyB=obstacle)
-            return contacts is not None and len(contacts) > 0
+            if contacts is not None and len(contacts) > 0:
+                return True
+        return False
 
     def draw_circle_at_target_position(
         self, target_position, radius=0.1, num_segments=30
@@ -280,6 +292,11 @@ class ArmPickAndDrop:
             self.step_simulation()
 
         reward = self.update_reward()
+        
+        if self.is_obstacle_collision:
+            self.robot.reset()
+            self.is_obstacle_collision = False
+
         done = self.check_task_done()
         info = {
             "is_object_picked_up": self.is_object_picked_up,
@@ -287,7 +304,6 @@ class ArmPickAndDrop:
             "is_object_dropped": self.is_object_dropped,
             "gripper_state": self.robot.get_gripper_state(),
             "robot_joint_states": self.robot.get_joint_obs(),
-            "is_obstacle_collision": self.is_obstacle_collision
         }
         return self.get_observation(), reward, done, info
 
@@ -398,12 +414,12 @@ class ArmPickAndDrop:
         # Xét theo khoảng cách nhỏ nhất
         if not self.is_object_picked_up:
             hand_to_object_distance = self.get_hand_to_object_distance()
-            # reward += (
-            #     self.minimum_ee_to_object_distance - hand_to_object_distance
-            # ) / self.initial_ee_to_object_distance
-            # if self.minimum_ee_to_object_distance < hand_to_object_distance:
-            #     self.minimum_ee_to_object_distance = hand_to_object_distance
-            reward += max(0, 1 / (hand_to_object_distance * 10 + 0.001))
+            reward += (
+                self.minimum_ee_to_object_distance - hand_to_object_distance
+            ) / self.initial_ee_to_object_distance
+            if self.minimum_ee_to_object_distance < hand_to_object_distance:
+                self.minimum_ee_to_object_distance = hand_to_object_distance
+            # reward += max(0, 1 / (hand_to_object_distance * 10 + 0.001))
 
         # tăng reward khi nhặt được vật thể
         if not self.is_object_picked_up and self.check_object_picked_up():
@@ -442,7 +458,7 @@ class ArmPickAndDrop:
 
         # giảm reward khi va chạm
         if self.check_collision():
-            logger.info("Collision detected! - Reset environment")
+            logger.info("Collision detected! - Reset robot")
             self.is_obstacle_collision = True
             reward -= 10
 
@@ -511,7 +527,7 @@ class ArmPickAndDrop:
         return reward
 
     def get_hand_to_object_distance(self):
-        hand_position = p.getJointState(self.robot.id, self.robot.mimic_parent_id)[0]
+        hand_position = p.getLinkState(self.robot.id, self.robot.mimic_parent_id)[0]
         object_position = p.getBasePositionAndOrientation(self.boxID)[0]
         distance = np.linalg.norm(np.array(hand_position) - np.array(object_position))
         return distance
@@ -567,7 +583,7 @@ class ArmPickAndDrop:
         Returns:
         - None
         """
-        initial_position = [0.0, 0.0, 0.0]
+        initial_position = [0.5, 0.0, 0.0]
         initial_orientation = p.getQuaternionFromEuler([0, 0, 0])
         p.resetBasePositionAndOrientation(
             self.boxID, initial_position, initial_orientation
