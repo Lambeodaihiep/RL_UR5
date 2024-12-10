@@ -255,12 +255,23 @@ class RobotBase(object):
         elif control_method == "joint":
             assert len(action) == self.arm_num_dofs
             joint_poses = action
+
+        # for i, joint_id in enumerate(self.arm_controllable_joints):
+        #     p.setJointMotorControl2(
+        #         self.id,
+        #         joint_id,
+        #         p.VELOCITY_CONTROL,
+        #         targetVelocity=joint_poses[i],
+        #         force=self.joints[joint_id].maxForce,
+        #         maxVelocity=self.joints[joint_id].maxVelocity,
+        #     )
+
         for i, joint_id in enumerate(self.arm_controllable_joints):
             p.setJointMotorControl2(
                 self.id,
                 joint_id,
-                p.VELOCITY_CONTROL,
-                targetVelocity=joint_poses[i],
+                p.POSITION_CONTROL,
+                joint_poses[i],
                 force=self.joints[joint_id].maxForce,
                 maxVelocity=self.joints[joint_id].maxVelocity,
             )

@@ -73,6 +73,10 @@ class ArmPickAndDrop:
 
         self.reset_variables()
 
+        # Add mount
+        self._mount_body_id = p.loadURDF(
+            "assets/obstacles/mount.urdf", [0.0, 0.0, 0.2], p.getQuaternionFromEuler([0, 0, 0]), useFixedBase=True)
+
         # Add obstacles
         self.obstacles = [
             p.loadURDF(
@@ -116,7 +120,7 @@ class ArmPickAndDrop:
         self.is_object_picked_up = False
         self.is_object_at_position_B = False
         self.is_object_dropped = False
-        self.is_object_picked_up = False
+        self.is_obstacle_collision = False
 
         self.initial_ee_to_object_distance = self.get_hand_to_object_distance()
         self.initial_object_to_target_distance = self.get_object_to_target_distance()
@@ -283,6 +287,7 @@ class ArmPickAndDrop:
             "is_object_dropped": self.is_object_dropped,
             "gripper_state": self.robot.get_gripper_state(),
             "robot_joint_states": self.robot.get_joint_obs(),
+            "is_obstacle_collision": self.is_obstacle_collision
         }
         return self.get_observation(), reward, done, info
 
@@ -437,7 +442,8 @@ class ArmPickAndDrop:
 
         # giảm reward khi va chạm
         if self.check_collision():
-            logger.info("Collision detected!")
+            logger.info("Collision detected! - Reset environment")
+            self.is_obstacle_collision = True
             reward -= 10
 
         # Phạt khi tay máy bị kẹt ở 1 hành động quá lâu, và reset lại môi trường
